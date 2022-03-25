@@ -1,9 +1,0 @@
-{
-  "name": "youtube_user",
-  "version": "0.0.1",
-  "private": true,
-  "description": "*Albert Launcher* user customized window switcher extension.",
-  "devDependencies": {
-    "@commitlint/config-conventional": "^16.2.1"
-  }
-}

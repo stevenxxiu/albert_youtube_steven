@@ -21,7 +21,7 @@ __version__ = '0.4.2'
 __triggers__ = 'yt '
 __authors__ = ['Steven Xu', 'manuelschneid3r']
 
-DEFAULT_ICON_PATH = str(Path(__file__).parent / 'icons/youtube.svg')
+ICON_PATH = str(Path(__file__).parent / 'icons/youtube.svg')
 DATA_REGEX = re.compile(r'\b(var\s|window\[")ytInitialData("\])?\s*=\s*(.*)\s*;</script>', re.MULTILINE)
 TEMP_DIR = Path(tempfile.mkdtemp(prefix='albert_yt_'))
 
@@ -66,7 +66,7 @@ def download_item_icon(item):
 
 
 def entry_to_item(type_, data):
-    icon = DEFAULT_ICON_PATH
+    icon = ICON_PATH
     match type_:
         case 'videoRenderer':
             subtext = ['Video']
@@ -159,7 +159,7 @@ def handleQuery(query):
         items.append(
             Item(
                 id=__title__,
-                icon=DEFAULT_ICON_PATH,
+                icon=ICON_PATH,
                 text='Show more in browser',
                 actions=[
                     UrlAction('Show more in browser', f'https://www.youtube.com/results?search_query={query.string}')

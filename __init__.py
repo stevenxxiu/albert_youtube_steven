@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-
 '''Query and open YouTube videos and channels.
 
 Synopsis: <trigger> <query>'''

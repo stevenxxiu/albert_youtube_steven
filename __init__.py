@@ -1,23 +1,22 @@
-'''Query and open YouTube videos and channels.
-
-Synopsis: <trigger> <query>'''
-
 import json
 import re
 import tempfile
 import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from typing import Any, Dict, List
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
-from albert import Item, UrlAction, critical, info  # pylint: disable=import-error
+from albert import Action, Item, Query, QueryHandler, critical, info, openUrl  # pylint: disable=import-error
 
 
-__title__ = 'YouTube User'
-__version__ = '0.4.2'
-__triggers__ = 'yt '
-__authors__ = ['Steven Xu', 'manuelschneid3r']
+md_iid = '0.5'
+md_version = '1.0'
+md_name = 'YouTube User'
+md_description = 'Query and open YouTube videos and channels.'
+md_url = 'https://github.com/stevenxxiu/albert_youtube_user'
+md_maintainers = '@stevenxxiu'
 
 ICON_PATH = str(Path(__file__).parent / 'icons/youtube.svg')
 DATA_REGEX = re.compile(r'\b(var\s|window\[")ytInitialData("\])?\s*=\s*(.*)\s*;</script>', re.MULTILINE)
@@ -25,12 +24,12 @@ TEMP_DIR = Path(tempfile.mkdtemp(prefix='albert_yt_'))
 
 HEADERS = {
     'User-Agent': (
-        'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/62.0.3202.62 Safari/537.36'
+        'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36'
     )
 }
 
 
-def log_html(html):
+def log_html(html: bytes) -> None:
     log_time = time.strftime('%Y%m%d-%H%M%S')
     log_name = 'albert.plugins.youtube_dump'
     log_path = Path(f'/tmp/{log_name}-{log_time}.html')
@@ -43,33 +42,33 @@ def log_html(html):
     critical('  https://www.github.com/albertlauncher/albert/issues/new')
 
 
-def urlopen_with_headers(url):
+def urlopen_with_headers(url: str) -> Any:
     req = Request(headers=HEADERS, url=url)
     return urlopen(req)
 
 
-def text_from(val):
+def text_from(val: Dict[str, Any]) -> str:
     text = val['simpleText'] if 'runs' not in val else ''.join(str(v['text']) for v in val['runs'])
 
     return text.strip()
 
 
-def download_item_icon(item):
-    url = item.icon
+def download_item_icon(item: Item) -> None:
+    url = item.icon[0]
     video_id = url.split('/')[-2]
     path = TEMP_DIR / f'{video_id}.png'
-    with urlopen_with_headers(item.icon) as response, path.open('wb') as sr:
+    with urlopen_with_headers(url) as response, path.open('wb') as sr:
         sr.write(response.read())
-    item.icon = str(path)
+    item.icon = [str(path)]
 
 
-def entry_to_item(type_, data):
+def entry_to_item(type_, data) -> Item | None:
     icon = ICON_PATH
     match type_:
         case 'videoRenderer':
             subtext = ['Video']
             action = 'Watch on Youtube'
-            link = f'watch?v={data["videoId"]}'
+            url_path = f'watch?v={data["videoId"]}'
             if 'lengthText' in data:
                 subtext.append(text_from(data['lengthText']))
             if 'shortViewCountText' in data:
@@ -81,7 +80,7 @@ def entry_to_item(type_, data):
         case 'channelRenderer':
             subtext = ['Channel']
             action = 'Show on Youtube'
-            link = f'channel/{data["channelId"]}'
+            url_path = f'channel/{data["channelId"]}'
             if 'videoCountText' in data:
                 subtext.append(text_from(data['videoCountText']))
             if 'subscriberCountText' in data:
@@ -90,21 +89,21 @@ def entry_to_item(type_, data):
             return None
 
     return Item(
-        id=__title__,
-        icon=icon,
+        id=f'{md_name}/{url_path}',
         text=text_from(data['title']),
         subtext=' | '.join(subtext),
-        actions=[UrlAction(action, 'https://www.youtube.com/' + link)],
+        icon=[icon],
+        actions=[Action(f'{md_name}/{url_path}', action, lambda: openUrl(f'https://www.youtube.com/{url_path}'))],
     )
 
 
-def results_to_items(results):
-    items = []
+def results_to_items(results: dict) -> List[Item]:
+    items: List[Item] = []
     for result in results:
         for type_, data in result.items():
             try:
                 item = entry_to_item(type_, data)
-                if not item:
+                if item is None:
                     continue
                 items.append(item)
             except KeyError as e:
@@ -113,55 +112,80 @@ def results_to_items(results):
     return items
 
 
-def handleQuery(query):
-    if not query.isTriggered or not query.string.strip():
-        return None
+class Plugin(QueryHandler):
+    @staticmethod
+    def id() -> str:
+        return __name__
 
-    # Avoid rate limiting
-    time.sleep(0.2)
-    if not query.isValid:
-        return None
+    @staticmethod
+    def name() -> str:
+        return md_name
 
-    query.disableSort()
+    @staticmethod
+    def description() -> str:
+        return md_description
 
-    info(f'Searching YouTube for \'{query.string}\'')
-    url = f'https://www.youtube.com/results?{urlencode({"search_query": query.string.strip()})}'
+    @staticmethod
+    def defaultTrigger() -> str:
+        return 'yt'
 
-    with urlopen_with_headers(url) as response:
-        response_bytes = response.read()
-        match = re.search(DATA_REGEX, response_bytes.decode())
-        if match is None:
-            critical(
-                'Failed to receive expected data from YouTube. This likely means API changes, but could just be a '
-                'failed request.'
-            )
-            log_html(response_bytes)
-            return None
+    @staticmethod
+    def synopsis() -> str:
+        return 'query'
 
-        results = json.loads(match.group(3))
-        primary_contents = results['contents']['twoColumnSearchResultsRenderer']['primaryContents']
-        results = primary_contents['sectionListRenderer']['contents'][0]['itemSectionRenderer']['contents']
-        items = results_to_items(results)
+    @staticmethod
+    def handleQuery(query: Query) -> None:
+        if not query.string.strip():
+            return
 
-        # Purge previous icons
-        for child in TEMP_DIR.iterdir():
-            if child.is_file():
-                child.unlink()
+        # Avoid rate limiting
+        time.sleep(0.2)
+        if not query.isValid:
+            return
 
-        # Download icons
-        with ThreadPoolExecutor(max_workers=10) as e:
+        info(f'Searching YouTube for \'{query.string}\'')
+        url = f'https://www.youtube.com/results?{urlencode({"search_query": query.string.strip()})}'
+
+        with urlopen_with_headers(url) as response:
+            response_bytes: bytes = response.read()
+            match = re.search(DATA_REGEX, response_bytes.decode())
+            if match is None:
+                critical(
+                    'Failed to receive expected data from YouTube. This likely means API changes, but could just be a '
+                    'failed request.'
+                )
+                log_html(response_bytes)
+                return
+
+            results = json.loads(match.group(3))
+            primary_contents = results['contents']['twoColumnSearchResultsRenderer']['primaryContents']
+            results = primary_contents['sectionListRenderer']['contents'][0]['itemSectionRenderer']['contents']
+            items = results_to_items(results)
+
+            # Purge previous icons
+            for child in TEMP_DIR.iterdir():
+                if child.is_file():
+                    child.unlink()
+
+            # Download icons
+            with ThreadPoolExecutor(max_workers=10) as e:
+                for item in items:
+                    e.submit(download_item_icon, item)
+
             for item in items:
-                e.submit(download_item_icon, item)
+                query.add(item)
 
-        # Add a link to the *YouTube* page, in case there's more results, including results we didn't include
-        items.append(
-            Item(
-                id=__title__,
-                icon=ICON_PATH,
+            # Add a link to the *YouTube* page, in case there's more results, including results we didn't include
+            item = Item(
+                id=f'{md_name}/show_more',
                 text='Show more in browser',
+                icon=[ICON_PATH],
                 actions=[
-                    UrlAction('Show more in browser', f'https://www.youtube.com/results?search_query={query.string}')
+                    Action(
+                        f'{md_name}/show_more',
+                        'Show more in browser',
+                        lambda: openUrl(f'https://www.youtube.com/results?search_query={query.string}'),
+                    )
                 ],
             )
-        )
-        return items
+            query.add(item)

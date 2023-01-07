@@ -135,7 +135,8 @@ class Plugin(QueryHandler):
 
     @staticmethod
     def handleQuery(query: Query) -> None:
-        if not query.string.strip():
+        query_str = query.string.strip()
+        if not query_str:
             return
 
         # Avoid rate limiting
@@ -143,8 +144,8 @@ class Plugin(QueryHandler):
         if not query.isValid:
             return
 
-        info(f'Searching YouTube for \'{query.string}\'')
-        url = f'https://www.youtube.com/results?{urlencode({"search_query": query.string.strip()})}'
+        info(f'Searching YouTube for \'{query_str}\'')
+        url = f'https://www.youtube.com/results?{urlencode({"search_query": query_str})}'
 
         with urlopen_with_headers(url) as response:
             response_bytes: bytes = response.read()
@@ -184,7 +185,7 @@ class Plugin(QueryHandler):
                     Action(
                         f'{md_name}/show_more',
                         'Show more in browser',
-                        lambda: openUrl(f'https://www.youtube.com/results?search_query={query.string}'),
+                        lambda: openUrl(f'https://www.youtube.com/results?search_query={query_str}'),
                     )
                 ],
             )

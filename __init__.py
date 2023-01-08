@@ -113,28 +113,22 @@ def results_to_items(results: dict) -> List[Item]:
 
 
 class Plugin(QueryHandler):
-    @staticmethod
-    def id() -> str:
+    def id(self) -> str:
         return __name__
 
-    @staticmethod
-    def name() -> str:
+    def name(self) -> str:
         return md_name
 
-    @staticmethod
-    def description() -> str:
+    def description(self) -> str:
         return md_description
 
-    @staticmethod
-    def defaultTrigger() -> str:
+    def defaultTrigger(self) -> str:
         return 'yt'
 
-    @staticmethod
-    def synopsis() -> str:
+    def synopsis(self) -> str:
         return 'query'
 
-    @staticmethod
-    def handleQuery(query: Query) -> None:
+    def handleQuery(self, query: Query) -> None:
         query_str = query.string.strip()
         if not query_str:
             return

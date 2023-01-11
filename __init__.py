@@ -135,9 +135,10 @@ class Plugin(QueryHandler):
             return
 
         # Avoid rate limiting
-        time.sleep(0.2)
-        if not query.isValid:
-            return
+        for _ in range(50):
+            time.sleep(0.01)
+            if not query.isValid:
+                return
 
         info(f'Searching YouTube for \'{query_str}\'')
         url = f'https://www.youtube.com/results?{urlencode({"search_query": query_str})}'

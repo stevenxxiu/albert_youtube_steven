@@ -168,6 +168,8 @@ class Plugin(QueryHandler):
             with ThreadPoolExecutor(max_workers=10) as e:
                 for item in items:
                     e.submit(download_item_icon, item)
+                    if not query.isValid:
+                        return
 
             for item in items:
                 query.add(item)

@@ -4,7 +4,7 @@ import tempfile
 import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
@@ -48,7 +48,7 @@ def urlopen_with_headers(url: str) -> Any:
     return urlopen(req)
 
 
-def text_from(val: Dict[str, Any]) -> str:
+def text_from(val: dict[str, Any]) -> str:
     text = val['simpleText'] if 'runs' not in val else ''.join(str(v['text']) for v in val['runs'])
 
     return text.strip()
@@ -98,8 +98,8 @@ def entry_to_item(type_, data) -> Item | None:
     )
 
 
-def results_to_items(results: dict) -> List[Item]:
-    items: List[Item] = []
+def results_to_items(results: dict) -> list[Item]:
+    items: list[Item] = []
     for result in results:
         for type_, data in result.items():
             try:

@@ -19,7 +19,7 @@ md_url = 'https://github.com/stevenxxiu/albert_youtube_steven'
 md_maintainers = '@stevenxxiu'
 
 TRIGGER = 'yt'
-ICON = ':youtube'
+ICON_PATH = str(Path(__file__).parent / 'icons/youtube.svg')
 DATA_REGEX = re.compile(r'\b(var\s|window\[")ytInitialData("\])?\s*=\s*(.*)\s*;</script>', re.MULTILINE)
 TEMP_DIR = Path(tempfile.mkdtemp(prefix='albert_yt_'))
 
@@ -64,7 +64,7 @@ def download_item_icon(item: Item) -> None:
 
 
 def entry_to_item(type_, data) -> Item | None:
-    icon = ICON
+    icon = ICON_PATH
     match type_:
         case 'videoRenderer':
             subtext = ['Video']
@@ -178,7 +178,7 @@ class Plugin(QueryHandler):
             item = Item(
                 id=f'{md_name}/show_more',
                 text='Show more in browser',
-                icon=[ICON],
+                icon=[ICON_PATH],
                 actions=[
                     Action(
                         f'{md_name}/show_more',

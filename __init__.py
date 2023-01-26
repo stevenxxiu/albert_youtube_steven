@@ -14,7 +14,7 @@ from albert import Action, Item, Query, QueryHandler, critical, info, openUrl  #
 md_iid = '0.5'
 md_version = '1.3'
 md_name = 'YouTube Steven'
-md_description = 'Query and open YouTube videos and channels.'
+md_description = 'Query and open YouTube videos and channels'
 md_url = 'https://github.com/stevenxxiu/albert_youtube_steven'
 md_maintainers = '@stevenxxiu'
 

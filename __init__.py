@@ -18,7 +18,6 @@ md_description = 'Query and open YouTube videos and channels'
 md_url = 'https://github.com/stevenxxiu/albert_youtube_steven'
 md_maintainers = '@stevenxxiu'
 
-TRIGGER = 'yt'
 ICON_PATH = str(Path(__file__).parent / 'icons/youtube.svg')
 DATA_REGEX = re.compile(r'\b(var\s|window\[")ytInitialData("\])?\s*=\s*(.*)\s*;</script>', re.MULTILINE)
 
@@ -133,7 +132,7 @@ class Plugin(QueryHandler):
         self.temp_dir.rmdir()
 
     def defaultTrigger(self) -> str:
-        return f'{TRIGGER} '
+        return 'yt '
 
     def synopsis(self) -> str:
         return 'query'

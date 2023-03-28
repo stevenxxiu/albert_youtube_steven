@@ -1,4 +1,6 @@
 # Albert Launcher YouTube Extension
+Query and open *YouTube* videos and channels.
+
 ## Install
 To install, copy or symlink this directory to `~/.local/share/albert/org.albert.extension.python/modules/youtube_steven/`.
 

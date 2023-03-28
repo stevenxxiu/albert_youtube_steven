@@ -8,7 +8,16 @@ from typing import Any
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
-from albert import Action, Item, Query, QueryHandler, critical, info, openUrl  # pylint: disable=import-error
+from albert import (  # pylint: disable=import-error
+    Action,
+    Item,
+    Query,
+    QueryHandler,
+    critical,
+    info,
+    openUrl,
+    setClipboardText,
+)
 
 
 md_iid = '0.5'
@@ -87,12 +96,21 @@ def entry_to_item(type_, data) -> Item | None:
         case _:
             return None
 
+    title = text_from(data['title'])
+    url = f'https://www.youtube.com/{url_path}'
     return Item(
         id=f'{md_name}/{url_path}',
-        text=text_from(data['title']),
+        text=title,
         subtext=' | '.join(subtext),
         icon=[icon],
-        actions=[Action(f'{md_name}/{url_path}', action, lambda: openUrl(f'https://www.youtube.com/{url_path}'))],
+        actions=[
+            Action(f'{md_name}/{url_path}', action, lambda: openUrl(url)),
+            Action(
+                f'{md_name}/copy',
+                'Copy to clipboard',
+                lambda: setClipboardText(f'[{title}]({url})'),
+            ),
+        ],
     )
 
 

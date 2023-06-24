@@ -10,24 +10,26 @@ from urllib.request import Request, urlopen
 
 from albert import (  # pylint: disable=import-error
     Action,
-    Item,
-    Query,
-    QueryHandler,
-    critical,
-    info,
+    PluginInstance,
+    StandardItem,
+    TriggerQuery,
+    TriggerQueryHandler,
     openUrl,
     setClipboardText,
 )
 
 
-md_iid = '0.5'
-md_version = '1.3'
+critical = globals().get('critical', lambda _: None)
+info = globals().get('info', lambda _: None)
+
+md_iid = '2.0'
+md_version = '1.5'
 md_name = 'YouTube Steven'
-md_description = 'Query and open YouTube videos and channels'
+md_description = 'TriggerQuery and open YouTube videos and channels'
 md_url = 'https://github.com/stevenxxiu/albert_youtube_steven'
 md_maintainers = '@stevenxxiu'
 
-ICON_PATH = str(Path(__file__).parent / 'icons/youtube.svg')
+ICON_URL = f'file:{Path(__file__).parent / "icons/youtube.svg"}'
 DATA_REGEX = re.compile(r'\b(var\s|window\[")ytInitialData("\])?\s*=\s*(.*)\s*;</script>', re.MULTILINE)
 
 HEADERS = {
@@ -61,17 +63,17 @@ def text_from(val: dict[str, Any]) -> str:
     return text.strip()
 
 
-def download_item_icon(item: Item, temp_dir: Path) -> None:
-    url = item.icon[0]
+def download_item_icon(item: StandardItem, temp_dir: Path) -> None:
+    url = item.iconUrls[0]
     video_id = url.split('/')[-2]
     path = temp_dir / f'{video_id}.png'
     with urlopen_with_headers(url) as response, path.open('wb') as sr:
         sr.write(response.read())
-    item.icon = [str(path)]
+    item.iconUrls = [f'file:{path}']
 
 
-def entry_to_item(type_, data) -> Item | None:
-    icon = ICON_PATH
+def entry_to_item(type_, data) -> StandardItem | None:
+    icon = ICON_URL
     match type_:
         case 'videoRenderer':
             subtext = ['Video']
@@ -98,11 +100,11 @@ def entry_to_item(type_, data) -> Item | None:
 
     title = text_from(data['title'])
     url = f'https://www.youtube.com/{url_path}'
-    return Item(
+    return StandardItem(
         id=f'{md_name}/{url_path}',
         text=title,
         subtext=' | '.join(subtext),
-        icon=[icon],
+        iconUrls=[icon],
         actions=[
             Action(f'{md_name}/{url_path}', action, lambda: openUrl(url)),
             Action(
@@ -114,8 +116,8 @@ def entry_to_item(type_, data) -> Item | None:
     )
 
 
-def results_to_items(results: dict) -> list[Item]:
-    items: list[Item] = []
+def results_to_items(results: dict) -> list[StandardItem]:
+    items: list[StandardItem] = []
     for result in results:
         for type_, data in result.items():
             try:
@@ -129,17 +131,14 @@ def results_to_items(results: dict) -> list[Item]:
     return items
 
 
-class Plugin(QueryHandler):
+class Plugin(PluginInstance, TriggerQueryHandler):
     temp_dir = None
 
-    def id(self) -> str:
-        return __name__
-
-    def name(self) -> str:
-        return md_name
-
-    def description(self) -> str:
-        return md_description
+    def __init__(self):
+        TriggerQueryHandler.__init__(
+            self, id=__name__, name=md_name, description=md_description, synopsis='query', defaultTrigger='yt'
+        )
+        PluginInstance.__init__(self, extensions=[self])
 
     def initialize(self) -> None:
         self.temp_dir = Path(tempfile.mkdtemp(prefix='albert_yt_'))
@@ -149,13 +148,7 @@ class Plugin(QueryHandler):
             child.unlink()
         self.temp_dir.rmdir()
 
-    def defaultTrigger(self) -> str:
-        return 'yt '
-
-    def synopsis(self) -> str:
-        return 'query'
-
-    def handleQuery(self, query: Query) -> None:
+    def handleTriggerQuery(self, query: TriggerQuery) -> None:
         query_str = query.string.strip()
         if not query_str:
             return
@@ -200,10 +193,10 @@ class Plugin(QueryHandler):
                 query.add(item)
 
             # Add a link to the *YouTube* page, in case there's more results, including results we didn't include
-            item = Item(
+            item = StandardItem(
                 id=f'{md_name}/show_more',
                 text='Show more in browser',
-                icon=[ICON_PATH],
+                iconUrls=[ICON_URL],
                 actions=[
                     Action(
                         f'{md_name}/show_more',

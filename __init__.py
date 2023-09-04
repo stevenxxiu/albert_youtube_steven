@@ -136,7 +136,7 @@ class Plugin(PluginInstance, TriggerQueryHandler):
 
     def __init__(self):
         TriggerQueryHandler.__init__(
-            self, id=__name__, name=md_name, description=md_description, synopsis='query', defaultTrigger='yt'
+            self, id=__name__, name=md_name, description=md_description, synopsis='query', defaultTrigger='yt '
         )
         PluginInstance.__init__(self, extensions=[self])
 

@@ -12,7 +12,6 @@ from albert import (  # pylint: disable=import-error
     Action,
     PluginInstance,
     StandardItem,
-    TriggerQuery,
     TriggerQueryHandler,
     openUrl,
     setClipboardText,
@@ -22,8 +21,8 @@ from albert import (  # pylint: disable=import-error
 critical = globals().get('critical', lambda _: None)
 info = globals().get('info', lambda _: None)
 
-md_iid = '2.0'
-md_version = '1.5'
+md_iid = '2.3'
+md_version = '1.6'
 md_name = 'YouTube Steven'
 md_description = 'TriggerQuery and open YouTube videos and channels'
 md_url = 'https://github.com/stevenxxiu/albert_youtube_steven'
@@ -132,23 +131,19 @@ def results_to_items(results: dict) -> list[StandardItem]:
 
 
 class Plugin(PluginInstance, TriggerQueryHandler):
-    temp_dir = None
-
     def __init__(self):
         TriggerQueryHandler.__init__(
             self, id=__name__, name=md_name, description=md_description, synopsis='query', defaultTrigger='yt '
         )
-        PluginInstance.__init__(self, extensions=[self])
-
-    def initialize(self) -> None:
+        PluginInstance.__init__(self)
         self.temp_dir = Path(tempfile.mkdtemp(prefix='albert_yt_'))
 
-    def finalize(self) -> None:
+    def __del__(self) -> None:
         for child in self.temp_dir.iterdir():
             child.unlink()
         self.temp_dir.rmdir()
 
-    def handleTriggerQuery(self, query: TriggerQuery) -> None:
+    def handleTriggerQuery(self, query) -> None:
         query_str = query.string.strip()
         if not query_str:
             return

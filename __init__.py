@@ -29,7 +29,7 @@ md_url = 'https://github.com/stevenxxiu/albert_youtube_steven'
 md_maintainers = '@stevenxxiu'
 
 ICON_URL = f'file:{Path(__file__).parent / "icons/youtube.svg"}'
-DATA_REGEX = re.compile(r'\b(var\s|window\[")ytInitialData("\])?\s*=\s*(.*)\s*;</script>', re.MULTILINE)
+DATA_REGEX = re.compile(r'\b(var\s|window\[")ytInitialData("\])?\s*=\s*(.*?)\s*;</script>', re.MULTILINE)
 
 HEADERS = {
     'User-Agent': (
@@ -170,8 +170,10 @@ class Plugin(PluginInstance, TriggerQueryHandler):
 
             results = json.loads(match.group(3))
             primary_contents = results['contents']['twoColumnSearchResultsRenderer']['primaryContents']
-            results = primary_contents['sectionListRenderer']['contents'][0]['itemSectionRenderer']['contents']
-            items = results_to_items(results)
+            contents = primary_contents['sectionListRenderer']['contents']
+            items = []
+            for content_item in contents:
+                items.extend(results_to_items(content_item.get('itemSectionRenderer', {}).get('contents', [])))
 
             # Purge previous icons
             for child in self.temp_dir.iterdir():

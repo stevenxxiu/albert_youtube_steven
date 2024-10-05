@@ -2,7 +2,7 @@
 Query and open *YouTube* videos and channels.
 
 ## Install
-To install, copy or symlink this directory to `~/.local/share/albert/org.albert.extension.python/modules/youtube_steven/`.
+To install, copy or symlink this directory to `~/.local/share/albert/python/plugins/youtube_steven/`.
 
 ## Development Setup
 To setup the project for development, run:

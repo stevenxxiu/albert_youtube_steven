@@ -8,7 +8,7 @@ from typing import Any
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
-from albert import (  # pylint: disable=import-error
+from albert import (
     Action,
     PluginInstance,
     StandardItem,
@@ -17,16 +17,16 @@ from albert import (  # pylint: disable=import-error
     setClipboardText,
 )
 
-
 critical = globals().get('critical', lambda _: None)
 info = globals().get('info', lambda _: None)
 
-md_iid = '2.3'
-md_version = '1.6'
+md_iid = '3.0'
+md_version = '1.7'
 md_name = 'YouTube Steven'
 md_description = 'TriggerQuery and open YouTube videos and channels'
+md_license = 'MIT'
 md_url = 'https://github.com/stevenxxiu/albert_youtube_steven'
-md_maintainers = '@stevenxxiu'
+md_authors = ['@stevenxxiu']
 
 ICON_URL = f'file:{Path(__file__).parent / "icons/youtube.svg"}'
 DATA_REGEX = re.compile(r'\b(var\s|window\[")ytInitialData("\])?\s*=\s*(.*?)\s*;</script>', re.MULTILINE)
@@ -132,16 +132,20 @@ def results_to_items(results: dict) -> list[StandardItem]:
 
 class Plugin(PluginInstance, TriggerQueryHandler):
     def __init__(self):
-        TriggerQueryHandler.__init__(
-            self, id=__name__, name=md_name, description=md_description, synopsis='query', defaultTrigger='yt '
-        )
         PluginInstance.__init__(self)
+        TriggerQueryHandler.__init__(self)
         self.temp_dir = Path(tempfile.mkdtemp(prefix='albert_yt_'))
 
     def __del__(self) -> None:
         for child in self.temp_dir.iterdir():
             child.unlink()
         self.temp_dir.rmdir()
+
+    def synopsis(self, _query: str) -> str:
+        return 'query'
+
+    def defaultTrigger(self):
+        return 'yt '
 
     def handleTriggerQuery(self, query) -> None:
         query_str = query.string.strip()
@@ -154,7 +158,7 @@ class Plugin(PluginInstance, TriggerQueryHandler):
             if not query.isValid:
                 return
 
-        info(f'Searching YouTube for \'{query_str}\'')
+        info(f"Searching YouTube for '{query_str}'")
         url = f'https://www.youtube.com/results?{urlencode({"search_query": query_str})}'
 
         with urlopen_with_headers(url) as response:

@@ -4,21 +4,27 @@ import tempfile
 import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable, TypedDict, override
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
+from albert import openUrl  # pyright: ignore[reportUnknownVariableType]
+from albert import setClipboardText  # pyright: ignore[reportUnknownVariableType]
 from albert import (
     Action,
     PluginInstance,
+    Query,
     StandardItem,
     TriggerQueryHandler,
-    openUrl,
-    setClipboardText,
 )
 
-critical = globals().get('critical', lambda _: None)
-info = globals().get('info', lambda _: None)
+setClipboardText: Callable[[str], None]
+openUrl: Callable[[str], None]
+
+_default_critical: Callable[[str], None] = lambda _: None  # noqa: E731
+critical: Callable[[str], None] = globals().get('critical', _default_critical)  # pyright: ignore[reportAny]
+_default_info: Callable[[str], None] = lambda _: None  # noqa: E731
+info: Callable[[str], None] = globals().get('info', _default_info)  # pyright: ignore[reportAny]
 
 md_iid = '3.0'
 md_version = '1.7'
@@ -44,20 +50,20 @@ def log_html(html: bytes) -> None:
     log_path = Path(f'/tmp/{log_name}-{log_time}.html')
 
     with log_path.open('wb') as sr:
-        sr.write(html)
+        _ = sr.write(html)
 
     critical(f'The HTML output has been dumped to {log_path}')
     critical('If the page looks ok in a browser, please include the dump in a new issue:')
     critical('  https://www.github.com/albertlauncher/albert/issues/new')
 
 
-def urlopen_with_headers(url: str) -> Any:
+def urlopen_with_headers(url: str) -> Any:  # pyright: ignore[reportAny, reportExplicitAny]
     req = Request(headers=HEADERS, url=url)
-    return urlopen(req)
+    return urlopen(req)  # pyright: ignore[reportAny]
 
 
-def text_from(val: dict[str, Any]) -> str:
-    text = val['simpleText'] if 'runs' not in val else ''.join(str(v['text']) for v in val['runs'])
+def text_from(val: dict[str, Any]) -> str:  # pyright: ignore[reportExplicitAny]
+    text = val['simpleText'] if 'runs' not in val else ''.join(str(v['text']) for v in val['runs'])  # pyright: ignore[reportAny]
 
     return text.strip()
 
@@ -66,12 +72,32 @@ def download_item_icon(item: StandardItem, temp_dir: Path) -> None:
     url = item.iconUrls[0]
     video_id = url.split('/')[-2]
     path = temp_dir / f'{video_id}.png'
-    with urlopen_with_headers(url) as response, path.open('wb') as sr:
-        sr.write(response.read())
+    with urlopen_with_headers(url) as response, path.open('wb') as sr:  # pyright: ignore[reportAny]
+        _ = sr.write(response.read())  # pyright: ignore[reportAny]
     item.iconUrls = [f'file:{path}']
 
 
-def entry_to_item(type_, data) -> StandardItem | None:
+class YtThumbnail(TypedDict):
+    url: str
+
+
+class YtThumbnailRes(TypedDict):
+    thumbnails: list[YtThumbnail]
+
+
+class YtEntry(TypedDict):
+    videoId: str
+    title: dict[str, Any]  # pyright: ignore[reportExplicitAny]
+    channelId: str
+    lengthText: dict[str, Any]  # pyright: ignore[reportExplicitAny]
+    shortViewCountText: dict[str, Any]  # pyright: ignore[reportExplicitAny]
+    publishedTimeText: dict[str, Any]  # pyright: ignore[reportExplicitAny]
+    thumbnail: YtThumbnailRes
+    videoCountText: dict[str, Any]  # pyright: ignore[reportExplicitAny]
+    subscriberCountText: dict[str, Any]  # pyright: ignore[reportExplicitAny]
+
+
+def entry_to_item(type_: str, data: YtEntry) -> StandardItem | None:
     icon = ICON_URL
     match type_:
         case 'videoRenderer':
@@ -115,7 +141,7 @@ def entry_to_item(type_, data) -> StandardItem | None:
     )
 
 
-def results_to_items(results: dict) -> list[StandardItem]:
+def results_to_items(results: list[dict[str, YtEntry]]) -> list[StandardItem]:
     items: list[StandardItem] = []
     for result in results:
         for type_, data in result.items():
@@ -125,12 +151,14 @@ def results_to_items(results: dict) -> list[StandardItem]:
                     continue
                 items.append(item)
             except KeyError as e:
-                critical(e)
+                critical(str(e))
                 critical(json.dumps(result, indent=4))
     return items
 
 
 class Plugin(PluginInstance, TriggerQueryHandler):
+    temp_dir: Path
+
     def __init__(self):
         PluginInstance.__init__(self)
         TriggerQueryHandler.__init__(self)
@@ -141,13 +169,16 @@ class Plugin(PluginInstance, TriggerQueryHandler):
             child.unlink()
         self.temp_dir.rmdir()
 
+    @override
     def synopsis(self, _query: str) -> str:
         return 'query'
 
+    @override
     def defaultTrigger(self):
         return 'yt '
 
-    def handleTriggerQuery(self, query) -> None:
+    @override
+    def handleTriggerQuery(self, query: Query) -> None:
         query_str = query.string.strip()
         if not query_str:
             return
@@ -161,23 +192,23 @@ class Plugin(PluginInstance, TriggerQueryHandler):
         info(f"Searching YouTube for '{query_str}'")
         url = f'https://www.youtube.com/results?{urlencode({"search_query": query_str})}'
 
-        with urlopen_with_headers(url) as response:
-            response_bytes: bytes = response.read()
+        with urlopen_with_headers(url) as response:  # pyright: ignore[reportAny]
+            response_bytes: bytes = response.read()  # pyright: ignore[reportAny]
             match = re.search(DATA_REGEX, response_bytes.decode())
             if match is None:
                 critical(
                     'Failed to receive expected data from YouTube. This likely means API changes, but could just be a '
-                    'failed request.'
+                    + 'failed request.'
                 )
                 log_html(response_bytes)
                 return
 
-            results = json.loads(match.group(3))
-            primary_contents = results['contents']['twoColumnSearchResultsRenderer']['primaryContents']
-            contents = primary_contents['sectionListRenderer']['contents']
-            items = []
-            for content_item in contents:
-                items.extend(results_to_items(content_item.get('itemSectionRenderer', {}).get('contents', [])))
+            results = json.loads(match.group(3))  # pyright: ignore[reportAny]
+            primary_contents = results['contents']['twoColumnSearchResultsRenderer']['primaryContents']  # pyright: ignore[reportAny]
+            contents = primary_contents['sectionListRenderer']['contents']  # pyright: ignore[reportAny]
+            items: list[StandardItem] = []
+            for content_item in contents:  # pyright: ignore[reportAny]
+                items.extend(results_to_items(content_item.get('itemSectionRenderer', {}).get('contents', [])))  # pyright: ignore[reportAny]
 
             # Purge previous icons
             for child in self.temp_dir.iterdir():
@@ -186,12 +217,12 @@ class Plugin(PluginInstance, TriggerQueryHandler):
             # Download icons
             with ThreadPoolExecutor(max_workers=10) as e:
                 for item in items:
-                    e.submit(download_item_icon, item, self.temp_dir)
+                    _ = e.submit(download_item_icon, item, self.temp_dir)
                     if not query.isValid:
                         return
 
             for item in items:
-                query.add(item)
+                query.add(item)  # pyright: ignore[reportUnknownMemberType]
 
             # Add a link to the *YouTube* page, in case there's more results, including results we didn't include
             item = StandardItem(
@@ -206,4 +237,4 @@ class Plugin(PluginInstance, TriggerQueryHandler):
                     )
                 ],
             )
-            query.add(item)
+            query.add(item)  # pyright: ignore[reportUnknownMemberType]

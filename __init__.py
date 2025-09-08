@@ -4,7 +4,7 @@ import tempfile
 import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import Any, Callable, TypedDict, override
+from typing import Any, Callable, TypedDict, cast, override
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
@@ -12,6 +12,7 @@ from albert import openUrl  # pyright: ignore[reportUnknownVariableType]
 from albert import setClipboardText  # pyright: ignore[reportUnknownVariableType]
 from albert import (
     Action,
+    Item,
     PluginInstance,
     Query,
     StandardItem,
@@ -221,9 +222,6 @@ class Plugin(PluginInstance, TriggerQueryHandler):
                     if not query.isValid:
                         return
 
-            for item in items:
-                query.add(item)  # pyright: ignore[reportUnknownMemberType]
-
             # Add a link to the *YouTube* page, in case there's more results, including results we didn't include
             item = StandardItem(
                 id=f'{md_name}/show_more',
@@ -237,4 +235,6 @@ class Plugin(PluginInstance, TriggerQueryHandler):
                     )
                 ],
             )
-            query.add(item)  # pyright: ignore[reportUnknownMemberType]
+            items.append(item)
+
+            query.add(cast(list[Item], items))  # pyright: ignore[reportUnknownMemberType]

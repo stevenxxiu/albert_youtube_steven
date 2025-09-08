@@ -27,6 +27,8 @@ critical: Callable[[str], None] = globals().get('critical', _default_critical)  
 _default_info: Callable[[str], None] = lambda _: None  # noqa: E731
 info: Callable[[str], None] = globals().get('info', _default_info)  # pyright: ignore[reportAny]
 
+type GenId = Callable[[], str]
+
 md_iid = '3.0'
 md_version = '1.7'
 md_name = 'YouTube Steven'
@@ -98,7 +100,7 @@ class YtEntry(TypedDict):
     subscriberCountText: dict[str, Any]  # pyright: ignore[reportExplicitAny]
 
 
-def entry_to_item(type_: str, data: YtEntry) -> StandardItem | None:
+def entry_to_item(type_: str, data: YtEntry, gen_id: GenId) -> StandardItem | None:
     icon = ICON_URL
     match type_:
         case 'videoRenderer':
@@ -127,7 +129,7 @@ def entry_to_item(type_: str, data: YtEntry) -> StandardItem | None:
     title = text_from(data['title'])
     url = f'https://www.youtube.com/{url_path}'
     return StandardItem(
-        id=f'{md_name}/{url_path}',
+        id=gen_id(),
         text=title,
         subtext=' | '.join(subtext),
         iconUrls=[icon],
@@ -142,12 +144,12 @@ def entry_to_item(type_: str, data: YtEntry) -> StandardItem | None:
     )
 
 
-def results_to_items(results: list[dict[str, YtEntry]]) -> list[StandardItem]:
+def results_to_items(results: list[dict[str, YtEntry]], gen_id: GenId) -> list[StandardItem]:
     items: list[StandardItem] = []
     for result in results:
         for type_, data in result.items():
             try:
-                item = entry_to_item(type_, data)
+                item = entry_to_item(type_, data, gen_id)
                 if item is None:
                     continue
                 items.append(item)
@@ -209,7 +211,7 @@ class Plugin(PluginInstance, TriggerQueryHandler):
             contents = primary_contents['sectionListRenderer']['contents']  # pyright: ignore[reportAny]
             items: list[StandardItem] = []
             for content_item in contents:  # pyright: ignore[reportAny]
-                items.extend(results_to_items(content_item.get('itemSectionRenderer', {}).get('contents', [])))  # pyright: ignore[reportAny]
+                items.extend(results_to_items(content_item.get('itemSectionRenderer', {}).get('contents', []), self.id))  # pyright: ignore[reportAny]
 
             # Purge previous icons
             for child in self.temp_dir.iterdir():
@@ -224,7 +226,7 @@ class Plugin(PluginInstance, TriggerQueryHandler):
 
             # Add a link to the *YouTube* page, in case there's more results, including results we didn't include
             item = StandardItem(
-                id=f'{md_name}/show_more',
+                id=self.id(),
                 text='Show more in browser',
                 iconUrls=[ICON_URL],
                 actions=[

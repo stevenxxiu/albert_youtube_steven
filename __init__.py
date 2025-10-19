@@ -134,9 +134,9 @@ def entry_to_item(type_: str, data: YtEntry, gen_id: GenId) -> StandardItem | No
         subtext=' | '.join(subtext),
         iconUrls=[icon],
         actions=[
-            Action(f'{md_name}/{url_path}', action, lambda: openUrl(url)),
+            Action(gen_id(), action, lambda: openUrl(url)),
             Action(
-                f'{md_name}/copy',
+                gen_id(),
                 'Copy to clipboard',
                 lambda: setClipboardText(f'[{title}]({url})'),
             ),
@@ -243,7 +243,7 @@ class Plugin(PluginInstance, TriggerQueryHandler):
                 iconUrls=[ICON_URL],
                 actions=[
                     Action(
-                        f'{md_name}/show_more',
+                        self.id(),
                         'Show more in browser',
                         lambda: openUrl(f'https://www.youtube.com/results?search_query={query_str}'),
                     )

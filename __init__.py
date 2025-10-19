@@ -3,6 +3,7 @@ import re
 import tempfile
 import time
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, TypedDict, cast, override
 from urllib.parse import urlencode
@@ -17,6 +18,7 @@ from albert import (
     Query,
     StandardItem,
     TriggerQueryHandler,
+    makeImageIcon,
 )
 
 setClipboardText: Callable[[str], None]
@@ -29,7 +31,7 @@ info: Callable[[str], None] = globals().get('info', _default_info)  # pyright: i
 
 type GenId = Callable[[], str]
 
-md_iid = '3.0'
+md_iid = '4.0'
 md_version = '1.7'
 md_name = 'YouTube Steven'
 md_description = 'TriggerQuery and open YouTube videos and channels'
@@ -37,7 +39,7 @@ md_license = 'MIT'
 md_url = 'https://github.com/stevenxxiu/albert_youtube_steven'
 md_authors = ['@stevenxxiu']
 
-ICON_URL = f'file:{Path(__file__).parent / "icons/youtube.svg"}'
+ICON_PATH = Path(__file__).parent / 'icons/youtube.svg'
 DATA_REGEX = re.compile(r'\b(var\s|window\[")ytInitialData("\])?\s*=\s*(.*?)\s*;</script>', re.MULTILINE)
 
 HEADERS = {
@@ -71,13 +73,23 @@ def text_from(val: dict[str, Any]) -> str:  # pyright: ignore[reportExplicitAny]
     return text.strip()
 
 
-def download_item_icon(item: StandardItem, temp_dir: Path) -> None:
-    url = item.iconUrls[0]
-    video_id = url.split('/')[-2]
-    path = temp_dir / f'{video_id}.png'
-    with urlopen_with_headers(url) as response, path.open('wb') as sr:  # pyright: ignore[reportAny]
+@dataclass
+class ItemData:
+    title: str
+    subtext: str
+    url: str
+    action_name: str
+    icon_url: str | None
+    icon_path: Path | None
+
+
+def download_item_icon(item_data: ItemData, temp_dir: Path) -> None:
+    if item_data.icon_url is None:
+        return
+    video_id = item_data.icon_url.split('/')[-2]
+    item_data.icon_path = temp_dir / f'{video_id}.png'
+    with urlopen_with_headers(item_data.icon_url) as response, item_data.icon_path.open('wb') as sr:  # pyright: ignore[reportAny]
         _ = sr.write(response.read())  # pyright: ignore[reportAny]
-    item.iconUrls = [f'file:{path}']
 
 
 class YtThumbnail(TypedDict):
@@ -100,12 +112,12 @@ class YtEntry(TypedDict):
     subscriberCountText: dict[str, Any]  # pyright: ignore[reportExplicitAny]
 
 
-def entry_to_item(type_: str, data: YtEntry, gen_id: GenId) -> StandardItem | None:
-    icon = ICON_URL
+def entry_to_item_data(type_: str, data: YtEntry) -> ItemData | None:
+    icon_url = None
     match type_:
         case 'videoRenderer':
             subtext = ['Video']
-            action = 'Watch on Youtube'
+            action_name = 'Watch on Youtube'
             url_path = f'watch?v={data["videoId"]}'
             if 'lengthText' in data:
                 subtext.append(text_from(data['lengthText']))
@@ -114,10 +126,10 @@ def entry_to_item(type_: str, data: YtEntry, gen_id: GenId) -> StandardItem | No
             if 'publishedTimeText' in data:
                 subtext.append(text_from(data['publishedTimeText']))
             if data['thumbnail']['thumbnails']:
-                icon = data['thumbnail']['thumbnails'][0]['url'].split('?', 1)[0]
+                icon_url = data['thumbnail']['thumbnails'][0]['url'].split('?', 1)[0]
         case 'channelRenderer':
             subtext = ['Channel']
-            action = 'Show on Youtube'
+            action_name = 'Show on Youtube'
             url_path = f'channel/{data["channelId"]}'
             if 'videoCountText' in data:
                 subtext.append(text_from(data['videoCountText']))
@@ -128,35 +140,22 @@ def entry_to_item(type_: str, data: YtEntry, gen_id: GenId) -> StandardItem | No
 
     title = text_from(data['title'])
     url = f'https://www.youtube.com/{url_path}'
-    return StandardItem(
-        id=gen_id(),
-        text=title,
-        subtext=' | '.join(subtext),
-        iconUrls=[icon],
-        actions=[
-            Action(gen_id(), action, lambda: openUrl(url)),
-            Action(
-                gen_id(),
-                'Copy to clipboard',
-                lambda: setClipboardText(f'[{title}]({url})'),
-            ),
-        ],
-    )
+    return ItemData(title, ' | '.join(subtext), url, action_name, icon_url, None)
 
 
-def results_to_items(results: list[dict[str, YtEntry]], gen_id: GenId) -> list[StandardItem]:
-    items: list[StandardItem] = []
+def results_to_items_data(results: list[dict[str, YtEntry]]) -> list[ItemData]:
+    items_data: list[ItemData] = []
     for result in results:
         for type_, data in result.items():
             try:
-                item = entry_to_item(type_, data, gen_id)
-                if item is None:
+                item_data = entry_to_item_data(type_, data)
+                if item_data is None:
                     continue
-                items.append(item)
+                items_data.append(item_data)
             except KeyError as e:
                 critical(str(e))
                 critical(json.dumps(result, indent=4))
-    return items
+    return items_data
 
 
 TMP_PREFIX = 'albert_yt_'
@@ -221,9 +220,11 @@ class Plugin(PluginInstance, TriggerQueryHandler):
             results = json.loads(match.group(3))  # pyright: ignore[reportAny]
             primary_contents = results['contents']['twoColumnSearchResultsRenderer']['primaryContents']  # pyright: ignore[reportAny]
             contents = primary_contents['sectionListRenderer']['contents']  # pyright: ignore[reportAny]
-            items: list[StandardItem] = []
+            items_data: list[ItemData] = []
             for content_item in contents:  # pyright: ignore[reportAny]
-                items.extend(results_to_items(content_item.get('itemSectionRenderer', {}).get('contents', []), self.id))  # pyright: ignore[reportAny]
+                items_data.extend(
+                    results_to_items_data(content_item.get('itemSectionRenderer', {}).get('contents', []))  # pyright: ignore[reportAny]
+                )
 
             # Purge previous icons
             for child in self.temp_dir.iterdir():
@@ -231,16 +232,32 @@ class Plugin(PluginInstance, TriggerQueryHandler):
 
             # Download icons
             with ThreadPoolExecutor(max_workers=10) as e:
-                for item in items:
-                    _ = e.submit(download_item_icon, item, self.temp_dir)
+                for item_data in items_data:
+                    _ = e.submit(download_item_icon, item_data, self.temp_dir)
                     if not query.isValid:
                         return
 
+            items: list[StandardItem] = []
+            for item_data in items_data:
+                icon_path = item_data.icon_path or ICON_PATH
+                open_call = lambda url_=url: openUrl(url_)  # noqa: E731
+                copy_call = lambda item_data_=item_data: setClipboardText(f'[{item_data.title}]({item_data.url})')  # noqa: E731
+                item = StandardItem(
+                    id=self.id(),
+                    text=item_data.title,
+                    subtext=item_data.subtext,
+                    icon_factory=lambda path=icon_path: makeImageIcon(path),
+                    actions=[
+                        Action(self.id(), item_data.action_name, open_call),
+                        Action(self.id(), 'Copy to clipboard', copy_call),
+                    ],
+                )
+                items.append(item)
             # Add a link to the *YouTube* page, in case there's more results, including results we didn't include
             item = StandardItem(
                 id=self.id(),
                 text='Show more in browser',
-                iconUrls=[ICON_URL],
+                icon_factory=lambda: makeImageIcon(ICON_PATH),
                 actions=[
                     Action(
                         self.id(),

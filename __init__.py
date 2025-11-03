@@ -29,8 +29,6 @@ critical: Callable[[str], None] = globals().get('critical', _default_critical)  
 _default_info: Callable[[str], None] = lambda _: None  # noqa: E731
 info: Callable[[str], None] = globals().get('info', _default_info)  # pyright: ignore[reportAny]
 
-type GenId = Callable[[], str]
-
 md_iid = '4.0'
 md_version = '1.7'
 md_name = 'YouTube Steven'
@@ -238,29 +236,29 @@ class Plugin(PluginInstance, TriggerQueryHandler):
                         return
 
             items: list[StandardItem] = []
-            for item_data in items_data:
+            for i, item_data in enumerate(items_data):
                 icon_path = item_data.icon_path or ICON_PATH
-                open_call = lambda url_=url: openUrl(url_)  # noqa: E731
-                copy_call = lambda item_data_=item_data: setClipboardText(f'[{item_data.title}]({item_data.url})')  # noqa: E731
+                open_call = lambda item_data_=item_data: openUrl(item_data_.url)  # noqa: E731
+                copy_call = lambda item_data_=item_data: setClipboardText(f'[{item_data_.title}]({item_data_.url})')  # noqa: E731
                 item = StandardItem(
-                    id=self.id(),
+                    id=str(i),
                     text=item_data.title,
                     subtext=item_data.subtext,
                     icon_factory=lambda path=icon_path: makeImageIcon(path),
                     actions=[
-                        Action(self.id(), item_data.action_name, open_call),
-                        Action(self.id(), 'Copy to clipboard', copy_call),
+                        Action('open', item_data.action_name, open_call),
+                        Action('copy', 'Copy to clipboard', copy_call),
                     ],
                 )
                 items.append(item)
             # Add a link to the *YouTube* page, in case there's more results, including results we didn't include
             item = StandardItem(
-                id=self.id(),
+                id='show_more',
                 text='Show more in browser',
                 icon_factory=lambda: makeImageIcon(ICON_PATH),
                 actions=[
                     Action(
-                        self.id(),
+                        'show_more',
                         'Show more in browser',
                         lambda: openUrl(f'https://www.youtube.com/results?search_query={query_str}'),
                     )

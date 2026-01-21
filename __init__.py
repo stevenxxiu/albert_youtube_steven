@@ -2,10 +2,11 @@ import json
 import re
 import tempfile
 import time
+from collections.abc import Generator
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, TypedDict, cast, override
+from typing import Any, Callable, TypedDict, override
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
@@ -13,12 +14,12 @@ from albert import openUrl  # pyright: ignore[reportUnknownVariableType]
 from albert import setClipboardText  # pyright: ignore[reportUnknownVariableType]
 from albert import (
     Action,
+    GeneratorQueryHandler,
+    Icon,
     Item,
     PluginInstance,
-    Query,
+    QueryContext,
     StandardItem,
-    TriggerQueryHandler,
-    makeImageIcon,
 )
 
 setClipboardText: Callable[[str], None]
@@ -29,8 +30,8 @@ critical: Callable[[str], None] = globals().get('critical', _default_critical)  
 _default_info: Callable[[str], None] = lambda _: None  # noqa: E731
 info: Callable[[str], None] = globals().get('info', _default_info)  # pyright: ignore[reportAny]
 
-md_iid = '4.0'
-md_version = '1.7'
+md_iid = '5.0'
+md_version = '1.8'
 md_name = 'YouTube Steven'
 md_description = 'TriggerQuery and open YouTube videos and channels'
 md_license = 'MIT'
@@ -169,12 +170,12 @@ def clean_tmp() -> None:
         temp_dir.rmdir()
 
 
-class Plugin(PluginInstance, TriggerQueryHandler):
+class Plugin(PluginInstance, GeneratorQueryHandler):
     temp_dir: Path
 
     def __init__(self):
         PluginInstance.__init__(self)
-        TriggerQueryHandler.__init__(self)
+        GeneratorQueryHandler.__init__(self)
         clean_tmp()
         self.temp_dir = Path(tempfile.mkdtemp(prefix=TMP_PREFIX))
 
@@ -190,15 +191,15 @@ class Plugin(PluginInstance, TriggerQueryHandler):
         return 'yt '
 
     @override
-    def handleTriggerQuery(self, query: Query) -> None:
-        query_str = query.string.strip()
+    def items(self, ctx: QueryContext) -> Generator[list[Item]]:
+        query_str = ctx.query.strip()
         if not query_str:
             return
 
         # Avoid rate limiting
         for _ in range(50):
             time.sleep(0.01)
-            if not query.isValid:
+            if not ctx.isValid:
                 return
 
         info(f"Searching YouTube for '{query_str}'")
@@ -232,10 +233,10 @@ class Plugin(PluginInstance, TriggerQueryHandler):
             with ThreadPoolExecutor(max_workers=10) as e:
                 for item_data in items_data:
                     _ = e.submit(download_item_icon, item_data, self.temp_dir)
-                    if not query.isValid:
+                    if not ctx.isValid:
                         return
 
-            items: list[StandardItem] = []
+            items: list[Item] = []
             for i, item_data in enumerate(items_data):
                 icon_path = item_data.icon_path or ICON_PATH
                 open_call = lambda item_data_=item_data: openUrl(item_data_.url)  # noqa: E731
@@ -244,7 +245,7 @@ class Plugin(PluginInstance, TriggerQueryHandler):
                     id=str(i),
                     text=item_data.title,
                     subtext=item_data.subtext,
-                    icon_factory=lambda path=icon_path: makeImageIcon(path),
+                    icon_factory=lambda path=icon_path: Icon.image(path),
                     actions=[
                         Action('open', item_data.action_name, open_call),
                         Action('copy', 'Copy to clipboard', copy_call),
@@ -255,7 +256,7 @@ class Plugin(PluginInstance, TriggerQueryHandler):
             item = StandardItem(
                 id='show_more',
                 text='Show more in browser',
-                icon_factory=lambda: makeImageIcon(ICON_PATH),
+                icon_factory=lambda: Icon.image(ICON_PATH),
                 actions=[
                     Action(
                         'show_more',
@@ -266,4 +267,4 @@ class Plugin(PluginInstance, TriggerQueryHandler):
             )
             items.append(item)
 
-            query.add(cast(list[Item], items))  # pyright: ignore[reportUnknownMemberType]
+            yield items

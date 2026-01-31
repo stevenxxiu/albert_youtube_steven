@@ -176,6 +176,7 @@ class Plugin(PluginInstance, GeneratorQueryHandler):
     def __init__(self):
         PluginInstance.__init__(self)
         GeneratorQueryHandler.__init__(self)
+        self.call_count: int = 0
         clean_tmp()
         self.temp_dir = Path(tempfile.mkdtemp(prefix=TMP_PREFIX))
 
@@ -196,11 +197,12 @@ class Plugin(PluginInstance, GeneratorQueryHandler):
         if not query_str:
             return
 
-        # Avoid rate limiting
-        for _ in range(50):
-            time.sleep(0.01)
-            if not ctx.isValid:
-                return
+        # Rate limit
+        self.call_count += 1
+        call_count = self.call_count
+        time.sleep(0.2)
+        if self.call_count != call_count:
+            return
 
         info(f"Searching YouTube for '{query_str}'")
         url = f'https://www.youtube.com/results?{urlencode({"search_query": query_str})}'

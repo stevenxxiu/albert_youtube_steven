@@ -157,31 +157,29 @@ def results_to_items_data(results: list[dict[str, YtEntry]]) -> list[ItemData]:
     return items_data
 
 
-TMP_PREFIX = 'albert_yt_'
-
-
-def clean_tmp() -> None:
+def clean_tmp(prefix: str) -> None:
     """
     Delete any temporary directories, that could've been created from a previous crash.
     """
-    for temp_dir in Path(tempfile.gettempdir()).glob(f'{TMP_PREFIX}*'):
+    for temp_dir in Path(tempfile.gettempdir()).glob(f'{prefix}*'):
         for child in temp_dir.iterdir():
             child.unlink()
         temp_dir.rmdir()
 
 
 class Plugin(PluginInstance, GeneratorQueryHandler):
+    TMP_PREFIX: str = 'albert_yt_'
     temp_dir: Path
 
     def __init__(self):
         PluginInstance.__init__(self)
         GeneratorQueryHandler.__init__(self)
         self.call_count: int = 0
-        clean_tmp()
-        self.temp_dir = Path(tempfile.mkdtemp(prefix=TMP_PREFIX))
+        clean_tmp(self.TMP_PREFIX)
+        self.temp_dir = Path(tempfile.mkdtemp(prefix=self.TMP_PREFIX))
 
     def __del__(self) -> None:
-        clean_tmp()
+        clean_tmp(self.TMP_PREFIX)
 
     @override
     def synopsis(self, _query: str) -> str:
